@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Cyber Threat Detection AI</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Syne:wght@400;500;700;800&display=swap" rel="stylesheet"/>
+
+  <!-- Cyber Threat Detection AI — frontend.
+       Talks to the FastAPI backend (/api/*); no API key ever reaches the browser.
+       Original single-file prototype lives in /prototype. -->
+
+  <style>
+    /* ── DESIGN TOKENS ─────────────────────────────────── */
+    :root {
+      --bg:        #0a0c10;
+      --bg2:       #0f1117;
+      --bg3:       #161b24;
+      --bg4:       #1c2333;
+      --border:    rgba(255,255,255,0.07);
+      --border2:   rgba(255,255,255,0.13);
+      --text:      #e2e8f0;
+      --muted:     #64748b;
+      --dim:       #334155;
+      --green:     #22c55e;
+      --green-bg:  rgba(34,197,94,0.10);
+      --amber:     #f59e0b;
+      --amber-bg:  rgba(245,158,11,0.10);
+      --red:       #ef4444;
+      --red-bg:    rgba(239,68,68,0.10);
+      --blue:      #3b82f6;
+      --blue-bg:   rgba(59,130,246,0.10);
+      --font-ui:   'Syne', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+      --r:   8px;
+      --rl: 12px;
+    }
+
+    /* ── RESET ──────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: var(--font-ui);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    /* Grid background */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        linear-gradient(rgba(34,197,94,0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(34,197,94,0.025) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── LAYOUT ─────────────────────────────────────────── */
+    .wrap {
+      max-width: 1140px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+      position: relative; z-index: 1;
+    }
+
+    /* ── HEADER ─────────────────────────────────────────── */
+    header {
+      display: flex; align-items: center; gap: 16px;
+      margin-bottom: 2rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .logo {
+      width: 44px; height: 44px; flex-shrink: 0;
+      background: var(--green-bg);
+      border: 1px solid rgba(34,197,94,0.25);
+      border-radius: var(--r);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .logo svg { width: 22px; height: 22px; stroke: var(--green); fill: none; stroke-width: 2; }
+    header h1 { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; color: #fff; }
+    header p  { font-size: 12px; color: var(--muted); font-family: var(--font-mono); margin-top: 2px; }
+    .hdr-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+    .live-dot {
+      width: 8px; height: 8px; border-radius: 50%; background: var(--green);
+      animation: livepulse 2s infinite;
+    }
+    @keyframes livepulse {
+      0%,100% { box-shadow: 0 0 0 0 rgba(34,197,94,0.5); }
+      50%      { box-shadow: 0 0 0 6px rgba(34,197,94,0); }
+    }
+    .live-lbl { font-size: 11px; color: var(--green); font-family: var(--font-mono); font-weight: 700; }
+
+    /* ── STATS ROW ──────────────────────────────────────── */
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0,1fr));
+      gap: 10px;
+      margin-bottom: 1.5rem;
+    }
+    .stat-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--rl);
+      padding: .9rem 1.1rem;
+      position: relative; overflow: hidden;
+    }
+    .stat-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0;
+      height: 2px; border-radius: 2px 2px 0 0;
+      background: var(--ac, var(--dim));
+    }
+    .stat-card.g { --ac: var(--green); }
+    .stat-card.r { --ac: var(--red);   }
+    .stat-card.a { --ac: var(--amber); }
+    .stat-card.b { --ac: var(--blue);  }
+    .stat-lbl { font-size: 11px; color: var(--muted); font-family: var(--font-mono); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 5px; }
+    .stat-val { font-size: 26px; font-weight: 800; letter-spacing: -1px; color: #fff; }
+    .cv-g { color: var(--green) !important; }
+    .cv-r { color: var(--red)   !important; }
+    .cv-a { color: var(--amber) !important; }
+    .cv-b { color: var(--blue)  !important; }
+
+    /* ── MAIN GRID ──────────────────────────────────────── */
+    .main {
+      display: grid;
+      grid-template-columns: 1fr 1.65fr;
+      gap: 16px; align-items: start;
+    }
+    @media (max-width: 800px) {
+      .main  { grid-template-columns: 1fr; }
+      .stats { grid-template-columns: repeat(2,1fr); }
+    }
+
+    /* ── PANELS ─────────────────────────────────────────── */
+    .panel {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--rl);
+      overflow: hidden;
+      position: relative;
+    }
+    .ph {
+      padding: .7rem 1.1rem;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .ph-title { font-size: 11px; font-family: var(--font-mono); font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+    .ph-tag   { font-size: 10px; font-family: var(--font-mono); color: var(--dim); }
+    .pb       { padding: 1rem 1.1rem; }
+
+    /* ── TEXTAREA ───────────────────────────────────────── */
+    textarea {
+      width: 100%;
+      font-family: var(--font-mono); font-size: 11.5px;
+      background: var(--bg3); border: 1px solid var(--border); border-radius: var(--r);
+      padding: .75rem; color: var(--text); resize: vertical; min-height: 210px;
+      line-height: 1.7; transition: border-color .2s;
+    }
+    textarea:focus { outline: none; border-color: rgba(34,197,94,.4); }
+    textarea::placeholder { color: var(--dim); }
+
+    /* ── SAMPLE BUTTONS ─────────────────────────────────── */
+    .sample-lbl { font-size: 11px; color: var(--muted); font-family: var(--font-mono); margin: .8rem 0 .4rem; }
+    .samples    { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 1rem; }
+    .sbtn {
+      font-family: var(--font-mono); font-size: 11px;
+      padding: 4px 10px;
+      background: var(--bg3); border: 1px solid var(--border2); border-radius: 4px;
+      color: var(--muted); cursor: pointer; transition: all .15s;
+    }
+    .sbtn:hover { border-color: var(--green); color: var(--green); background: var(--green-bg); }
+
+    /* ── ANALYZE BUTTON ─────────────────────────────────── */
+    .abtn {
+      width: 100%; padding: 11px;
+      font-family: var(--font-ui); font-size: 14px; font-weight: 700; letter-spacing: .3px;
+      background: var(--green); color: #000; border: none; border-radius: var(--r);
+      cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;
+      transition: all .2s;
+    }
+    .abtn:hover:not(:disabled) { background: #16a34a; transform: translateY(-1px); }
+    .abtn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+    .spinner {
+      width: 14px; height: 14px;
+      border: 2px solid rgba(0,0,0,.3); border-top-color: #000;
+      border-radius: 50%; animation: spin .6s linear infinite; display: none;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── SCAN LINE ──────────────────────────────────────── */
+    .scan-overlay { position: absolute; inset: 0; overflow: hidden; border-radius: var(--rl); pointer-events: none; }
+    .scan-line    { position: absolute; left: 0; right: 0; height: 2px; opacity: 0; }
+    .scan-line.on {
+      opacity: .45;
+      background: linear-gradient(90deg, transparent, var(--green), transparent);
+      animation: scandown 1.4s linear infinite;
+    }
+    @keyframes scandown { 0% { top: -2px; } 100% { top: 100%; } }
+
+    /* ── RESULTS PANEL ──────────────────────────────────── */
+    .res-hdr {
+      padding: .7rem 1.1rem; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .res-title { font-size: 13px; font-weight: 700; color: #fff; }
+    .badge {
+      font-family: var(--font-mono); font-size: 10px; font-weight: 700;
+      padding: 3px 9px; border-radius: 4px; letter-spacing: .5px; text-transform: uppercase;
+    }
+    .bd-ready    { background: var(--bg3);      color: var(--muted); border: 1px solid var(--border2); }
+    .bd-scanning { background: var(--amber-bg); color: var(--amber); border: 1px solid rgba(245,158,11,.3); }
+    .bd-critical { background: var(--red-bg);   color: var(--red);   border: 1px solid rgba(239,68,68,.3); }
+    .bd-high     { background: var(--amber-bg); color: var(--amber); border: 1px solid rgba(245,158,11,.3); }
+    .bd-medium   { background: var(--blue-bg);  color: var(--blue);  border: 1px solid rgba(59,130,246,.3); }
+    .bd-clean    { background: var(--green-bg); color: var(--green); border: 1px solid rgba(34,197,94,.3); }
+
+    /* Tabs */
+    .tabs { display: flex; border-bottom: 1px solid var(--border); }
+    .tab {
+      padding: .55rem 1rem;
+      font-size: 12px; font-family: var(--font-mono);
+      color: var(--muted); cursor: pointer;
+      border-bottom: 2px solid transparent; transition: all .15s;
+    }
+    .tab:hover { color: var(--text); }
+    .tab.on    { color: var(--green); border-bottom-color: var(--green); }
+
+    /* Output body */
+    .res-body {
+      padding: 1.1rem;
+      min-height: 320px; max-height: 520px;
+      overflow-y: auto;
+      font-family: var(--font-mono); font-size: 12.5px;
+      line-height: 1.85; color: var(--text);
+      white-space: pre-wrap;
+      scrollbar-width: thin; scrollbar-color: var(--dim) transparent;
+    }
+    .res-body::-webkit-scrollbar       { width: 4px; }
+    .res-body::-webkit-scrollbar-thumb { background: var(--dim); border-radius: 4px; }
+
+    .empty {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      height: 260px; gap: 12px; color: var(--dim);
+    }
+    .empty svg { width: 40px; height: 40px; opacity: .35; stroke: currentColor; fill: none; stroke-width: 1.5; }
+    .empty p   { font-size: 12px; text-align: center; max-width: 240px; line-height: 1.7; }
+
+    /* Streaming cursor */
+    .cur {
+      display: inline-block; width: 7px; height: 13px;
+      background: var(--green); vertical-align: middle; border-radius: 1px;
+      animation: blink .7s step-start infinite;
+    }
+    @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+
+    /* Q&A blocks */
+    .qa-q {
+      margin-top: 1.2rem; padding: .6rem .9rem;
+      background: var(--bg3);
+      border-left: 2px solid var(--blue);
+      border-radius: 0 var(--r) var(--r) 0;
+      color: var(--blue); font-size: 12px;
+    }
+    .qa-a { margin-top: .4rem; }
+
+    /* Follow-up bar */
+    .fbar {
+      display: none; gap: 8px; padding: .75rem 1.1rem;
+      border-top: 1px solid var(--border);
+    }
+    .fbar input {
+      flex: 1; font-family: var(--font-mono); font-size: 12px;
+      background: var(--bg3); border: 1px solid var(--border); border-radius: var(--r);
+      padding: 7px 12px; color: var(--text); transition: border-color .2s;
+    }
+    .fbar input:focus  { outline: none; border-color: rgba(34,197,94,.4); }
+    .fbar input::placeholder { color: var(--dim); }
+    .fbar button {
+      padding: 7px 16px; font-family: var(--font-mono); font-size: 12px; font-weight: 700;
+      background: var(--green-bg); border: 1px solid rgba(34,197,94,.3);
+      border-radius: var(--r); color: var(--green); cursor: pointer; transition: all .15s;
+    }
+    .fbar button:hover { background: var(--green); color: #000; }
+
+    /* ── FOOTER ─────────────────────────────────────────── */
+    .footer {
+      margin-top: 2rem; padding: .75rem 1.1rem;
+      background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r);
+      font-family: var(--font-mono); font-size: 11px; color: var(--muted);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .footer svg { width: 14px; height: 14px; flex-shrink: 0; stroke: var(--muted); fill: none; stroke-width: 2; }
+  </style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <!-- ── HEADER ────────────────────────────────────────── -->
+  <header>
+    <div class="logo">
+      <svg viewBox="0 0 24 24">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        <path d="M9 12l2 2 4-4"/>
+      </svg>
+    </div>
+    <div>
+      <h1>Cyber Threat Detection AI</h1>
+      <p>// AI-powered network traffic analysis &amp; threat explanation engine</p>
+    </div>
+    <div class="hdr-right">
+      <div class="live-dot"></div>
+      <span class="live-lbl">SYSTEM ONLINE</span>
+    </div>
+  </header>
+
+  <!-- ── STATS ─────────────────────────────────────────── -->
+  <div class="stats">
+    <div class="stat-card g">
+      <div class="stat-lbl">Packets / lines</div>
+      <div class="stat-val" id="s-pkt">—</div>
+    </div>
+    <div class="stat-card r">
+      <div class="stat-lbl">Threats found</div>
+      <div class="stat-val cv-r" id="s-thr">—</div>
+    </div>
+    <div class="stat-card a">
+      <div class="stat-lbl">Risk level</div>
+      <div class="stat-val" id="s-risk">—</div>
+    </div>
+    <div class="stat-card b">
+      <div class="stat-lbl">Status</div>
+      <div class="stat-val cv-b" id="s-stat">IDLE</div>
+    </div>
+  </div>
+
+  <!-- ── MAIN GRID ──────────────────────────────────────── -->
+  <div class="main">
+
+    <!-- LEFT: INPUT ───────────────────────────────────── -->
+    <div class="panel">
+      <div class="scan-overlay"><div class="scan-line" id="scan-line"></div></div>
+      <div class="ph">
+        <span class="ph-title">Traffic Input</span>
+        <span class="ph-tag">PCAP / LOG / IDS / NETFLOW</span>
+      </div>
+      <div class="pb">
+        <textarea id="ti" placeholder="Paste network traffic logs here…
+
+Examples accepted:
+• Firewall / IDS alert logs
+• PCAP packet summaries
+• Raw TCP/UDP session data
+• NetFlow / IPFIX records
+• Snort / Suricata alerts
+• Windows Security Event logs"></textarea>
+
+        <p class="sample-lbl">// Load a sample dataset:</p>
+        <div class="samples">
+          <button class="sbtn" onclick="load('portscan')">⬡ Port scan</button>
+          <button class="sbtn" onclick="load('ddos')">⬡ DDoS flood</button>
+          <button class="sbtn" onclick="load('malware')">⬡ Malware C2</button>
+          <button class="sbtn" onclick="load('exfil')">⬡ Data exfil</button>
+          <button class="sbtn" onclick="load('sqli')">⬡ SQL injection</button>
+          <button class="sbtn" onclick="load('brute')">⬡ Brute force</button>
+          <button class="sbtn" onclick="load('normal')">⬡ Clean traffic</button>
+        </div>
+
+        <button class="abtn" id="abtn" onclick="analyze()">
+          <div class="spinner" id="spin"></div>
+          <span id="blbl">Analyze Traffic</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- RIGHT: RESULTS ────────────────────────────────── -->
+    <div class="panel">
+      <div class="res-hdr">
+        <span class="res-title" id="rtitle">Awaiting traffic data</span>
+        <span class="badge bd-ready" id="rbadge">READY</span>
+      </div>
+      <div class="tabs">
+        <div class="tab on"  onclick="setTab('a',this)">AI Analysis</div>
+        <div class="tab"     onclick="setTab('i',this)">IOC Report</div>
+        <div class="tab"     onclick="setTab('e',this)">Plain English</div>
+      </div>
+      <div class="res-body" id="rbody">
+        <div class="empty">
+          <svg viewBox="0 0 24 24">
+            <circle cx="11" cy="11" r="8"/>
+            <path d="m21 21-4.35-4.35"/>
+          </svg>
+          <p>Paste network traffic data and click "Analyze Traffic" to begin AI-powered threat detection.</p>
+        </div>
+      </div>
+      <div class="fbar" id="fbar">
+        <input type="text" id="fq" placeholder="Ask a follow-up question about the threats found…"
+               onkeydown="if(event.key==='Enter')followUp()"/>
+        <button onclick="followUp()">Ask ↗</button>
+      </div>
+    </div>
+
+  </div><!-- /main -->
+
+  <!-- ── FOOTER ─────────────────────────────────────────── -->
+  <div class="footer">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
+    This tool is for defensive / educational purposes only. It uses the Anthropic Claude API to detect and explain threats in network traffic datasets.
+  </div>
+
+</div><!-- /wrap -->
+
+<script src="/static/samples.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>
